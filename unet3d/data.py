@@ -8,7 +8,7 @@ from .normalize import normalize_data_storage, reslice_image_set
 
 def create_data_file(out_file, n_channels, n_samples, image_shape):
     hdf5_file = tables.open_file(out_file, mode='w')
-    filters = tables.Filters(complevel=5, complib='blosc')
+    filters = tables.Filters(complevel=5, complib='blosc')  # suggested remove in https://github.com/ellisdg/3DUnetCNN/issues/58
     data_shape = tuple([0, n_channels] + list(image_shape))
     truth_shape = tuple([0, 1] + list(image_shape))
     data_storage = hdf5_file.create_earray(hdf5_file.root, 'data', tables.Float32Atom(), shape=data_shape,

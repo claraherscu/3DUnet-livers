@@ -128,7 +128,7 @@ def convert_brats_folder(in_folder, out_folder, truth_name="GlistrBoost_Manually
         truth_file = get_image(in_folder, truth_name)
     except RuntimeError:
         truth_file = get_image(in_folder, truth_name.split("_")[0])
-    out_file = os.path.abspath(os.path.join(out_folder, "truth.nii.gz"))
+    out_file = os.path.abspath(os.path.join(out_folder, "Liver.nii.gz"))
     shutil.copy(truth_file, out_file)
     check_origin(out_file, get_image(in_folder, config["all_modalities"][0]))
 
@@ -144,13 +144,17 @@ def convert_brats_data(brats_folder, out_folder, overwrite=False, no_bias_correc
     or tuple.
     :return:
     """
-    for subject_folder in glob.glob(os.path.join(brats_folder, "*", "*")):
+    for subject_folder in glob.glob(os.path.join(brats_folder, "*")):
         if os.path.isdir(subject_folder):
             subject = os.path.basename(subject_folder)
-            new_subject_folder = os.path.join(out_folder, os.path.basename(os.path.dirname(subject_folder)),
-                                              subject)
+            new_subject_folder = os.path.join(out_folder, subject)
             if not os.path.exists(new_subject_folder) or overwrite:
                 if not os.path.exists(new_subject_folder):
                     os.makedirs(new_subject_folder)
-                convert_brats_folder(subject_folder, new_subject_folder,
+                convert_brats_folder(subject_folder, new_subject_folder, truth_name="Liver",
                                      no_bias_correction_modalities=no_bias_correction_modalities)
+
+
+if __name__ == '__main__':
+    convert_brats_data("/cs/casmip/clara.herscu/git/3DUnet/brats/data-small/original",
+                       "/cs/casmip/clara.herscu/git/3DUnet/brats/data-small/preprocessed")

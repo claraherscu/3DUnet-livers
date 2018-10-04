@@ -85,5 +85,6 @@ def train_model(model, model_file, training_generator, validation_generator, ste
                                                 learning_rate_drop=learning_rate_drop,
                                                 learning_rate_epochs=learning_rate_epochs,
                                                 learning_rate_patience=learning_rate_patience,
-                                                early_stopping_patience=early_stopping_patience),
-                        use_multiprocessing=True)  # added as suggested in https://github.com/ellisdg/3DUnetCNN/issues/58
+                                                early_stopping_patience=early_stopping_patience))  #,
+                        # use_multiprocessing=True)
+                        # nb_worker=10)  # added as suggested in https://github.com/ellisdg/3DUnetCNN/issues/58

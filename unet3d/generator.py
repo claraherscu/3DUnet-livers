@@ -56,6 +56,10 @@ def get_training_and_validation_generators(data_file, batch_size, n_labels, trai
                                                           training_file=training_keys_file,
                                                           validation_file=validation_keys_file)
 
+    print("training list=", training_list)
+    print("validation list=", validation_list)
+
+    print("Creating the Training generator")
     training_generator = data_generator(data_file, training_list,
                                         batch_size=batch_size,
                                         n_labels=n_labels,
@@ -68,6 +72,7 @@ def get_training_and_validation_generators(data_file, batch_size, n_labels, trai
                                         patch_start_offset=training_patch_start_offset,
                                         skip_blank=skip_blank,
                                         permute=permute)
+    print("Creating the Validation generator")
     validation_generator = data_generator(data_file, validation_list,
                                           batch_size=validation_batch_size,
                                           n_labels=n_labels,
@@ -77,16 +82,19 @@ def get_training_and_validation_generators(data_file, batch_size, n_labels, trai
                                           skip_blank=skip_blank)
 
     # Set the number of training and testing samples per epoch correctly
-    num_training_steps = get_number_of_steps(get_number_of_patches(data_file, training_list, patch_shape,
-                                                                   skip_blank=skip_blank,
-                                                                   patch_start_offset=training_patch_start_offset,
-                                                                   patch_overlap=0), batch_size)
+    # num_training_steps = get_number_of_steps(get_number_of_patches(data_file, training_list, patch_shape,
+    #                                                                skip_blank=skip_blank,
+    #                                                                patch_start_offset=training_patch_start_offset,
+    #                                                                patch_overlap=0), batch_size)
+    # num_training_steps = 3071  # result of previous calculation on all 11* cases
+    num_training_steps = 800  # just setting to some lower number to shorten training time
     print("Number of training steps: ", num_training_steps)
 
-    num_validation_steps = get_number_of_steps(get_number_of_patches(data_file, validation_list, patch_shape,
-                                                                     skip_blank=skip_blank,
-                                                                     patch_overlap=validation_patch_overlap),
-                                               validation_batch_size)
+    # num_validation_steps = get_number_of_steps(get_number_of_patches(data_file, validation_list, patch_shape,
+    #                                                                  skip_blank=skip_blank,
+    #                                                                  patch_overlap=validation_patch_overlap),
+    #                                            validation_batch_size)
+    num_validation_steps = 256
     print("Number of validation steps: ", num_validation_steps)
 
     return training_generator, validation_generator, num_training_steps, num_validation_steps
@@ -105,10 +113,13 @@ def get_validation_split(data_file, training_file, validation_file, data_split=0
     """
     Splits the data into the training and validation indices list.
     :param data_file: pytables hdf5 data file
-    :param training_file:
-    :param validation_file:
-    :param data_split:
-    :param overwrite:
+    :param training_file: Pickle file where the index locations of the training data will be stored.
+    :param validation_file: Pickle file where the index locations of the validation data will be stored.
+    :param data_split: How the training and validation data will be split. 0 means all the data will be used for
+    validation and none of it will be used for training. 1 means that all the data will be used for training and none
+    will be used for validation. Default is 0.8 or 80%.
+    :param overwrite: If set to True, previous files will be overwritten. The default mode is false, so that the
+    training and validation splits won't be overwritten when rerunning model training.
     :return:
     """
     if overwrite or not os.path.exists(training_file):
@@ -160,18 +171,32 @@ def data_generator(data_file, index_list, batch_size=1, n_labels=1, labels=None,
 
 
 def get_number_of_patches(data_file, index_list, patch_shape=None, patch_overlap=0, patch_start_offset=None,
-                          skip_blank=True):
+                          skip_blank=False):
+    """
+    :param data_file: hdf5 file to load the data from.
+    :param index_list: list of indices of samples that are part of this set
+    :param patch_shape: Shape of the data to return with the generator. If None, the whole image will be returned.
+    (default is None)
+    :param patch_overlap: Number of pixels/voxels that will be overlapped in the validation data. (requires
+    patch_shape to not be None)
+    :param patch_start_offset: Tuple of length 3 containing integer values. Data will randomly be
+    offset by a number of pixels between (0, 0, 0) and the given tuple. (default is None)
+    :param skip_blank: If True, any blank (all-zero) label images/patches will be skipped by the data generator.
+    :return:
+    """
     if patch_shape:
+        # creating list of indices where the patches begin
         index_list = create_patch_index_list(index_list, data_file.root.data.shape[-3:], patch_shape, patch_overlap,
                                              patch_start_offset)
         count = 0
         for index in index_list:
             x_list = list()
             y_list = list()
+            # for every patch, reading data & GT from files and saving to a list
             add_data(x_list, y_list, data_file, index, skip_blank=skip_blank, patch_shape=patch_shape)
             if len(x_list) > 0:
                 count += 1
-        return count
+        return count  # return number of non-blank patches
     else:
         return len(index_list)
 
@@ -231,7 +256,7 @@ def add_data(x_list, y_list, data_file, index, augment=False, augment_flip=False
 def get_data_from_file(data_file, index, patch_shape=None):
     if patch_shape:
         index, patch_index = index
-        data, truth = get_data_from_file(data_file, index, patch_shape=None)
+        data, truth = get_data_from_file(data_file, index, patch_shape=None)  # data is the image and truth is the GT
         x = get_patch_from_3d_data(data, patch_shape, patch_index)
         y = get_patch_from_3d_data(truth, patch_shape, patch_index)
     else:

@@ -1,0 +1,4 @@
+# trying shell script
+python3 hello_world.py
+echo 'message body' | mutt -a '/cs/casmip/clara.herscu/git/3DUnet/test.txt' -s 'message subject' -- clara.herscu@mail.huji.ac.il
+python3 hello_world.py

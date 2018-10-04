@@ -1,0 +1,21 @@
+#
+# shell script running training a few times 
+#
+
+echo 'starting train script' | mutt -s 'starting train script' -- clara.herscu@mail.huji.ac.il
+
+# train 110 114
+python3 brats/train_110_114.py > log_train_110_114.txt
+echo 'finished running train 110_114' | mutt -a '/cs/casmip/clara.herscu/git/3DUnet/log_train_110_114.txt' -s 'finished running train 110_114' -- clara.herscu@mail.huji.ac.il
+
+# train 111 114
+python3 brats/train_111_114.py > log_train_111_114.txt
+echo 'finished running train 111_114' | mutt -a '/cs/casmip/clara.herscu/git/3DUnet/log_train_111_114.txt' -s 'finished running train 111_114' -- clara.herscu@mail.huji.ac.il
+
+# train 112 114
+python3 brats/train_112_114.py > log_train_112_114.txt
+echo 'finished running train 112_114' | mutt -a '/cs/casmip/clara.herscu/git/3DUnet/log_train_112_114.txt' -s 'finished running train 112_114' -- clara.herscu@mail.huji.ac.il
+
+# train all 11*
+python3 brats/train.py > log_train_all.txt
+echo 'finished running train' | mutt -a '/cs/casmip/clara.herscu/git/3DUnet/log_train_all.txt' -s 'finished running train 11*' -- clara.herscu@mail.huji.ac.il

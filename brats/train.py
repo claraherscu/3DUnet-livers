@@ -1,5 +1,6 @@
 import os
 import glob
+import numpy as np
 
 from unet3d.data import write_data_to_file, open_data_file
 from unet3d.generator import get_training_and_validation_generators
@@ -22,6 +23,10 @@ else:
     config["input_shape"] = tuple([config["nb_channels"]] + list(config["image_shape"]))
 config["truth_channel"] = config["nb_channels"]
 config["deconvolution"] = True  # if False, will use upsampling instead of deconvolution
+config["imgen_args"] = dict(horizontal_flip=True,
+                            zoom_range=0.1,
+                            rotation_range=3)  # arguments for ImageDataGenerator setting data augmentation
+config["imgen_seed"] = np.random.randn()  # random seed for the image augmentation, the same will be used for image&mask
 
 config["batch_size"] = 12
 config["validation_batch_size"] = 12  # originally 12, reducing to reduce memory use

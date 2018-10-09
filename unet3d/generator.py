@@ -87,14 +87,14 @@ def get_training_and_validation_generators(data_file, batch_size, n_labels, trai
     #                                                                patch_start_offset=training_patch_start_offset,
     #                                                                patch_overlap=0), batch_size)
     # num_training_steps = 3071  # result of previous calculation on all 11* cases
-    num_training_steps = 800  # just setting to some lower number to shorten training time
+    num_training_steps = 8  # just setting to some lower number to shorten training time for debugging
     print("Number of training steps: ", num_training_steps)
 
     # num_validation_steps = get_number_of_steps(get_number_of_patches(data_file, validation_list, patch_shape,
     #                                                                  skip_blank=skip_blank,
     #                                                                  patch_overlap=validation_patch_overlap),
     #                                            validation_batch_size)
-    num_validation_steps = 256
+    num_validation_steps = 2
     print("Number of validation steps: ", num_validation_steps)
 
     return training_generator, validation_generator, num_training_steps, num_validation_steps

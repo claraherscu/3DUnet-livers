@@ -4,6 +4,9 @@ import numpy as np
 from unet3d.data import open_data_file
 from multiprocessing import Pool
 from functools import partial
+from unet3d.generator import data_generator
+from unet3d.generator import create_patch_index_list
+import copy
 
 
 class ClassDataGenerator(keras.utils.Sequence):
@@ -12,7 +15,8 @@ class ClassDataGenerator(keras.utils.Sequence):
     """
 
     def __init__(self, file_name, batch_size=1024, data_split=0.8, start=0, end=None, root_name_x='data',
-                 root_name_y='truth', imgen_params=None, seed=1, is_train=True, patch_shape=None, crop_size=(256, 256)):
+                 root_name_y='truth', imgen_params=None, seed=1, is_train=True, patch_shape=None, crop_size=(256, 256),
+                 patch_overlap=0, patch_start_offset=None, n_processors=4):
         """
         initialization
         :param file_name: hd5 file name to load data from
@@ -29,11 +33,16 @@ class ClassDataGenerator(keras.utils.Sequence):
         :param is_train:
         :param patch_shape: (int, int, int) 3d shape of patches to be generated from data
         :param crop_size:
+        :param patch_overlap: Number of pixels/voxels that will be overlapped in the validation data. (requires
+                patch_shape to not be None)
+        :param patch_start_offset: Tuple of length 3 containing integer values. Data will randomly be
+                offset by a number of pixels between (0, 0, 0) and the given tuple. (default is None)
+        :type n_processors: Number of processors to use in parallel for augmentations
         """
 
         # TODO have to return patches and not whole images
 
-        self.imgen = ImageDataGenerator(**imgen_params)
+        self.imgen = ImageDataGenerator(**imgen_params)  # TODO: augmentations probably won't work
         self.maskgen = ImageDataGenerator(**imgen_params)
         self.seed = seed
         # self.crop_size = np.array(crop_size)
@@ -41,27 +50,30 @@ class ClassDataGenerator(keras.utils.Sequence):
         self.f = open_data_file(file_name, 'r')
 
         print('loading all the x data to memory...')
-        self.x_all = np.squeeze(getattr(self.f.root, root_name_x)[start:end])
+        self.x_all = getattr(self.f.root, root_name_x)[start:end]
+        self.x_all = np.squeeze(self.x_all)  # TODO: do we need this?
         print('loaded')
 
         print('loading all the y data to memory...')
-        self.y_all = np.squeeze(getattr(self.f.root, root_name_y)[start:end])
+        self.y_all = getattr(self.f.root, root_name_y)[start:end]
+        self.y_all = np.squeeze(self.y_all)  # TODO: do we need this?
         print('loaded')
 
-        self.x_shape = self.x_all[0].shape  # is (512, 512, 60)
-        self.patch_shape = patch_shape
+        self.x_shape = self.x_all[0].shape  # on images it is (512, 512, 60), on patches (8, 8, 8)
+        # self.patch_shape = patch_shape
+        # self.patch_start_offset = patch_start_offset
+        # self.patch_overlap = patch_overlap
 
         self.total_len = len(self.y_all)
         self.batch_size = batch_size
         self.len_segment = int(self.total_len / data_split)
-        # self.is_train = is_train
+        self.is_train = is_train
 
         self.shuffled_index = np.arange(self.total_len)
         if is_train:
             np.random.shuffle(self.shuffled_index)
 
-        NUM_PROCESSORS = 10
-        self.pool = Pool(NUM_PROCESSORS)
+        self.pool = Pool(n_processors)
 
     def __len__(self):
         "denotes number of batches per epoch"
@@ -72,8 +84,18 @@ class ClassDataGenerator(keras.utils.Sequence):
 
     def __getitem__(self, index):
         "generate one batch of data"
+        # TODO this way we have batch_size images in a batch inside of batch_size patches -- too much
         # generate indices of the batch
         indices = self.shuffled_index[index*self.batch_size:(index+1)*self.batch_size]
+        # if self.patch_shape:
+        #     patch_indices = create_patch_index_list(indices,
+        #                                             self.x_shape,
+        #                                             self.patch_shape,
+        #                                             self.patch_overlap,
+        #                                             self.patch_start_offset)
+        #
+        # else:
+        #     patch_indices = copy.copy(indices)
 
         # generate data from indices
         batch_images = np.zeros((self.batch_size, ) + self.x_shape)
@@ -81,6 +103,13 @@ class ClassDataGenerator(keras.utils.Sequence):
         for i, ind in enumerate(indices):
             img = self.x_all[ind]
             batch_images[i] = img
+
+        # TODO extract all patches of X and y (use pool?)
+
+        # patch_images = np.zeros((self.batch_size, ) + self.patch_shape)
+        # while len(patch_indices) > 0:
+        #     index = patch_indices.pop()
+        #     if self.patch_shape:
 
         # augmentation
         if self.is_train:

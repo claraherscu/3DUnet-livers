@@ -3,16 +3,17 @@ import glob
 import numpy as np
 
 from unet3d.data import write_data_to_file, open_data_file, write_patches_data_to_file
-from unet3d.generator import get_training_and_validation_generators
+from unet3d.generator import get_training_and_validation_generators, get_validation_split
 from unet3d.model import unet_model_3d
-from unet3d.training import load_old_model, train_model
+from unet3d.training import load_old_model, train_model, get_callbacks
+from unet3d.generator_multiprocess import ClassDataGenerator
 
 
 config = dict()
 config["pool_size"] = (2, 2, 2)  # pool size for the max pooling operations
 config["image_shape"] = (512, 512, 60)  # This determines what shape the images will be cropped/resampled to.
 config["patch_shape"] = (8, 8, 8)  # switch to None to train on the whole image
-config["labels"] = (1, 2, 4)  # the label numbers on the input image
+config["labels"] = [1]  # (1, 2, 4)  # the label numbers on the input image TODO -- why was this (1,2,4)
 config["n_labels"] = len(config["labels"])
 config["all_modalities"] = ["CT"]
 config["training_modalities"] = config["all_modalities"]  # change this if you want to only use some of the modalities
@@ -26,11 +27,11 @@ config["deconvolution"] = True  # if False, will use upsampling instead of decon
 config["imgen_args"] = dict(horizontal_flip=True,
                             zoom_range=0.1,
                             rotation_range=3)  # arguments for ImageDataGenerator setting data augmentation
-config["imgen_seed"] = np.random.randn()  # random seed for the image augmentation, the same will be used for image&mask
+config["imgen_seed"] = np.random.randint(1e+5)  # random seed for the image augmentation, the same will be used for image&mask
 
 config["batch_size"] = 12
 config["validation_batch_size"] = 12  # originally 12, reducing to reduce memory use
-config["n_epochs"] = 1 # 50  # cutoff the training after this many epochs
+config["n_epochs"] = 50  # cutoff the training after this many epochs
 config["patience"] = 10  # learning rate will be reduced after this many epochs if the validation loss is not improving
 config["early_stop"] = 50  # training will be stopped after this many epochs without the validation loss improving
 config["initial_learning_rate"] = 0.00001
@@ -45,25 +46,21 @@ config["training_patch_start_offset"] = (16, 16, 16)  # randomly offset the firs
 config["skip_blank"] = True  # if True, then patches without any target will be skipped
 
 config["write_patches"] = True
-config["data_file"] = os.path.abspath("liver_data_test_patches.h5")
-config["patch_data_file"] = os.path.abspath("liver_patch_data_test_patches.h5")  # file that will hold the patched data
-config["model_file"] = os.path.abspath("tumor_segmentation_model_test_patches.h5")
-config["training_file"] = os.path.abspath("training_ids_test_patches.pkl")
-config["validation_file"] = os.path.abspath("validation_ids_test_patches.pkl")
-config["overwrite"] = True  # If True, will previous files. If False, will use previously written files.
+config["data_file"] = os.path.abspath("liver_data.h5")
+config["patch_data_file_train"] = os.path.abspath("liver_patch_train_data.h5")  # file that will hold the patched data for training
+config["patch_data_file_val"] = os.path.abspath("liver_patch_val_data.h5")  # file that will hold the patched data for validation
+config["model_file"] = os.path.abspath("liver_segmentation_model_patches.h5")
+config["training_file"] = os.path.abspath("training_ids_patches.pkl")
+config["validation_file"] = os.path.abspath("validation_ids_patches.pkl")
+config["overwrite"] = False  # If True, will previous files. If False, will use previously written files.
 
 
 def fetch_training_data_files():
     training_data_files = list()
-    subject_dirs = [glob.glob(os.path.join(os.path.dirname(__file__), "data", "preprocessed", "volume-114")),
-    #                 glob.glob(os.path.join(os.path.dirname(__file__), "data", "preprocessed", "volume-111")),
-    #                 glob.glob(os.path.join(os.path.dirname(__file__), "data", "preprocessed", "volume-112")),
-                    glob.glob(os.path.join(os.path.dirname(__file__), "data", "preprocessed", "volume-110"))]
-    # for subject_dir in glob.glob(os.path.join(os.path.dirname(__file__), "data", "preprocessed", "volume-11*")):  # after fixing permissions, replace "volume-*" with "*"
-    for subject_dir in subject_dirs:  # after fixing permissions, replace "volume-*" with "*"
+    for subject_dir in glob.glob(os.path.join(os.path.dirname(__file__), "data_liver_segmentation", "preprocessed", "volume-*")):  # after fixing permissions, replace "volume-*" with "*"
         subject_files = list()
-        for modality in config["training_modalities"] + ["Tumors"]:
-            subject_files.append(os.path.join(subject_dir[0], modality + ".nii.gz"))
+        for modality in config["training_modalities"] + ["Liver"]:
+            subject_files.append(os.path.join(subject_dir, modality + ".nii.gz"))
         training_data_files.append(tuple(subject_files))
     return training_data_files
 
@@ -76,24 +73,40 @@ def main(overwrite=False):
         write_data_to_file(training_files, config["data_file"], image_shape=config["image_shape"])
     data_file_opened = open_data_file(config["data_file"])
 
-    if config["write_patches"]:
-        if overwrite or not os.path.exists(config["patch_data_file"]):
-            patches_data_file = write_patches_data_to_file(patches_data_file=config["patch_data_file"],
-                                                           patch_shape=config["patch_shape"],
-                                                           n_samples=len(training_files),
-                                                           n_channels=(len(training_files[0]) - 1),
-                                                           data_file=data_file_opened)
-        patch_data_file_opened = open_data_file(config["patch_data_file"])
+    # split to test and validation
+    training_list, validation_list = get_validation_split(data_file_opened,
+                                                          data_split=config["validation_split"],
+                                                          overwrite=config["overwrite"],
+                                                          training_file=config["training_file"],
+                                                          validation_file=config["validation_file"])
 
-    if not overwrite and os.path.exists(config["model_file"]):
-        model = load_old_model(config["model_file"])
-    else:
-        # instantiate new model
-        model = unet_model_3d(input_shape=config["input_shape"],
-                              pool_size=config["pool_size"],
-                              n_labels=config["n_labels"],
-                              initial_learning_rate=config["initial_learning_rate"],
-                              deconvolution=config["deconvolution"])
+    # TODO split into train and validation and create two separate files of patches?
+    # creating file for training and file for validation
+    if config["write_patches"]:
+        if overwrite or not os.path.exists(config["patch_data_file_train"]):
+            train_patches_data_file = write_patches_data_to_file(patches_data_file=config["patch_data_file_train"],
+                                                                 patch_shape=config["patch_shape"],
+                                                                 n_samples=len(training_list),
+                                                                 n_channels=(len(training_files[0]) - 1),
+                                                                 data_file=data_file_opened,
+                                                                 indices=training_list)
+        if overwrite or not os.path.exists(config["patch_data_file_val"]):
+            validation_patches_data_file = write_patches_data_to_file(patches_data_file=config["patch_data_file_val"],
+                                                                      patch_shape=config["patch_shape"],
+                                                                      n_samples=len(validation_list),
+                                                                      n_channels=(len(training_files[0]) - 1),
+                                                                      data_file=data_file_opened,
+                                                                      indices=validation_list)
+    #
+    # if not overwrite and os.path.exists(config["model_file"]):
+    #     model = load_old_model(config["model_file"])
+    # else:
+    #     # instantiate new model
+    #     model = unet_model_3d(input_shape=config["input_shape"],
+    #                           pool_size=config["pool_size"],
+    #                           n_labels=config["n_labels"],
+    #                           initial_learning_rate=config["initial_learning_rate"],
+    #                           deconvolution=config["deconvolution"])
 
     # get training and testing generators
     # train_generator, validation_generator, n_train_steps, n_validation_steps = get_training_and_validation_generators(
@@ -127,9 +140,37 @@ def main(overwrite=False):
     #             learning_rate_patience=config["patience"],
     #             early_stopping_patience=config["early_stop"],
     #             n_epochs=config["n_epochs"])
+
+    # # create generator
+    # training_gen = ClassDataGenerator(config["patch_data_file_train"],
+    #                                   imgen_params=config["imgen_args"],
+    #                                   batch_size=config["batch_size"],
+    #                                   seed=config["imgen_seed"])
+    # validation_gen = ClassDataGenerator(config["patch_data_file_val"],
+    #                                     imgen_params=config["imgen_args"],
+    #                                     batch_size=config["batch_size"],
+    #                                     seed=config["imgen_seed"])  # TODO change to validation data
+
+    # # run training
+    # model.fit_generator(generator=training_gen,
+    #                     steps_per_epoch=200,
+    #                     epochs=config["n_epochs"],
+    #                     validation_data=validation_gen,
+    #                     validation_steps=10,
+    #                     callbacks=get_callbacks(config["model_file"],
+    #                                             initial_learning_rate=config["initial_learning_rate"],
+    #                                             learning_rate_drop=config["learning_rate_drop"],
+    #                                             learning_rate_epochs=None,
+    #                                             learning_rate_patience=config["patience"],
+    #                                             early_stopping_patience=config["early_stop"]))
+
+    # Incompatible shapes: [6144] vs. [12288]
+    # 6144 = 12x8x8x8 = batch_size x patch_size x patch_size x patch_size
+    # 12288 = 6144x2 = batch_size x patch_size x patch_size x patch_size x number of labels?
+
     data_file_opened.close()
-    if config["write_patches"]:
-        patch_data_file_opened.close()
+    # if config["write_patches"]:
+    #     patch_data_file_opened.close()
 
 
 if __name__ == "__main__":

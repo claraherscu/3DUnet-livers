@@ -81,7 +81,8 @@ def write_data_to_file(training_data_files, out_file, image_shape, truth_dtype=n
     return out_file
 
 
-def write_patches_data_to_file(patches_data_file, patch_shape, n_samples, n_channels, data_file, patch_overlap=0):
+def write_patches_data_to_file(patches_data_file, patch_shape, n_samples, n_channels, data_file, patch_overlap=0,
+                               indices=None):
     """
     write all the patches (data, GT and indices) to a file
     :param patches_data_file: path filename where the patch data should be stored
@@ -89,6 +90,7 @@ def write_patches_data_to_file(patches_data_file, patch_shape, n_samples, n_chan
     :param patch_shape: 3-tuple shape of every patch
     :param patch_overlap: Number of pixels/voxels that will be overlapped in the data.
     (requires patch_shape to not be None)
+    :param indices: indices of the subset of files that should be stored in this file (if None, take all files)
     :return:
     """
     # creating hd5 file for the patches
@@ -107,14 +109,24 @@ def write_patches_data_to_file(patches_data_file, patch_shape, n_samples, n_chan
         raise e
 
     x_shape = data_file.root.data.shape
-    # collecting indices of all the patches of all the images
-    index_list = create_patch_index_list(index_list=range(x_shape[0]),
+
+    # collecting indices of all the patches of all the needed images
+    if indices is None:
+        indices = range(x_shape[0])
+
+    # TODO: maybe check for empty patches?
+    index_list = create_patch_index_list(index_list=indices,
                                          image_shape=x_shape[-3:],
                                          patch_shape=patch_shape,
                                          patch_overlap=patch_overlap)
 
     # iterating over all patch indices and adding them to the patches_data_file
+    i = 1
+    total = len(index_list)
     while len(index_list) > 0:
+        if i % 100 == 0:
+            print('done', str(i*100 / total)+'%\tat index', i, 'out of', total)
+        i += 1
         index = index_list.pop()
         data, truth = get_data_from_file(data_file, index, patch_shape=patch_shape)  # extracting data for this index
         index, patch_index = index  # extracting the patch index

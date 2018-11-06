@@ -42,7 +42,7 @@ class ClassDataGenerator(keras.utils.Sequence):
 
         # TODO have to return patches and not whole images
 
-        self.imgen = ImageDataGenerator(**imgen_params)  # TODO: augmentations probably won't work
+        self.imgen = ImageDataGenerator(**imgen_params)  # TODO: doesn't support 3D?
         self.maskgen = ImageDataGenerator(**imgen_params)
         self.seed = seed
         # self.crop_size = np.array(crop_size)
@@ -51,12 +51,12 @@ class ClassDataGenerator(keras.utils.Sequence):
 
         print('loading all the x data to memory...')
         self.x_all = getattr(self.f.root, root_name_x)[start:end]
-        self.x_all = np.squeeze(self.x_all)  # TODO: do we need this?
+        # self.x_all = np.squeeze(self.x_all)  # TODO: do we need this?
         print('loaded')
 
         print('loading all the y data to memory...')
         self.y_all = getattr(self.f.root, root_name_y)[start:end]
-        self.y_all = np.squeeze(self.y_all)  # TODO: do we need this?
+        # self.y_all = np.squeeze(self.y_all)  # TODO: do we need this?
         print('loaded')
 
         self.x_shape = self.x_all[0].shape  # on images it is (512, 512, 60), on patches (8, 8, 8)
@@ -66,7 +66,6 @@ class ClassDataGenerator(keras.utils.Sequence):
 
         self.total_len = len(self.y_all)
         self.batch_size = batch_size
-        self.len_segment = int(self.total_len / data_split)
         self.is_train = is_train
 
         self.shuffled_index = np.arange(self.total_len)
@@ -111,11 +110,12 @@ class ClassDataGenerator(keras.utils.Sequence):
         #     index = patch_indices.pop()
         #     if self.patch_shape:
 
-        # augmentation
-        if self.is_train:
-            rand_transform = partial(self.imgen.random_transform, seed=self.seed)
-            ret = self.pool.map(rand_transform, batch_images)
-            batch_images = np.array(ret)
+        # TODO: return augmentation - has error affine matrix has wrong number of rows
+        # # augmentation
+        # if self.is_train:
+        #     rand_transform = partial(self.imgen.random_transform, seed=self.seed)
+        #     ret = self.pool.map(rand_transform, batch_images)
+        #     batch_images = np.array(ret)
 
         # generate data masks from indices
         batch_y = np.zeros((self.batch_size, ) + self.x_shape)
@@ -123,11 +123,12 @@ class ClassDataGenerator(keras.utils.Sequence):
             img = self.y_all[ind]
             batch_y[i] = img
 
-        # same augmentation for y
-        if self.is_train:
-            rand_transform_y = partial(self.maskgen.random_transform, seed=self.seed)
-            ret_y = self.pool.map(rand_transform_y, batch_images)
-            batch_y = np.array(ret_y)
+        # TODO: return augmentation
+        # # same augmentation for y
+        # if self.is_train:
+        #     rand_transform_y = partial(self.maskgen.random_transform, seed=self.seed)
+        #     ret_y = self.pool.map(rand_transform_y, batch_images)
+        #     batch_y = np.array(ret_y)
 
         return batch_images, batch_y
 

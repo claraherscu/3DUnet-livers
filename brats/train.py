@@ -1,12 +1,18 @@
 import os
 import glob
 import numpy as np
+from argparse import ArgumentParser
 
 from unet3d.data import write_data_to_file, open_data_file, write_patches_data_to_file
 from unet3d.generator import get_training_and_validation_generators, get_validation_split
 from unet3d.model import unet_model_3d
 from unet3d.training import load_old_model, train_model, get_callbacks
 from unet3d.generator_multiprocess import ClassDataGenerator
+
+# argument parser for running patch creation from command-line
+parser = ArgumentParser()
+parser.add_argument('-f', '--filename', dest="filename", help="write patches to file, should be h5")
+parser.add_argument('-i', '--index', dest="indices", help="take files at these indices to write")
 
 
 config = dict()
@@ -46,13 +52,12 @@ config["training_patch_start_offset"] = (16, 16, 16)  # randomly offset the firs
 config["skip_blank"] = True  # if True, then patches without any target will be skipped
 
 config["write_patches"] = True
-config["data_file"] = os.path.abspath("liver_data.h5")
-config["patch_data_file_train"] = os.path.abspath("liver_patch_train_data.h5")  # file that will hold the patched data for training
-config["patch_data_file_val"] = os.path.abspath("liver_patch_val_data.h5")  # file that will hold the patched data for validation
+config["data_file"] = os.path.abspath("liver_data_unnormalized.h5")
+config["patch_data_file"] = os.path.abspath("liver_patch_data.h5")  # file that will hold the patched data for training
 config["model_file"] = os.path.abspath("liver_segmentation_model_patches.h5")
 config["training_file"] = os.path.abspath("training_ids_patches.pkl")
 config["validation_file"] = os.path.abspath("validation_ids_patches.pkl")
-config["overwrite"] = False  # If True, will previous files. If False, will use previously written files.
+config["overwrite"] = True  # If True, will previous files. If False, will use previously written files.
 
 
 def fetch_training_data_files():
@@ -67,36 +72,18 @@ def fetch_training_data_files():
 
 def main(overwrite=False):
     # convert input images into an hdf5 file
-    if overwrite or not os.path.exists(config["data_file"]):
-        training_files = fetch_training_data_files()
-
-        write_data_to_file(training_files, config["data_file"], image_shape=config["image_shape"])
+    # if overwrite or not os.path.exists(config["data_file"]):
+    #     training_files = fetch_training_data_files()
+    #
+    #     write_data_to_file(training_files, config["data_file"], image_shape=config["image_shape"], normalize=False)
     data_file_opened = open_data_file(config["data_file"])
 
-    # split to test and validation
-    training_list, validation_list = get_validation_split(data_file_opened,
-                                                          data_split=config["validation_split"],
-                                                          overwrite=config["overwrite"],
-                                                          training_file=config["training_file"],
-                                                          validation_file=config["validation_file"])
-
-    # TODO split into train and validation and create two separate files of patches?
-    # creating file for training and file for validation
+    # creating patches file
     if config["write_patches"]:
-        if overwrite or not os.path.exists(config["patch_data_file_train"]):
-            train_patches_data_file = write_patches_data_to_file(patches_data_file=config["patch_data_file_train"],
-                                                                 patch_shape=config["patch_shape"],
-                                                                 n_samples=len(training_list),
-                                                                 n_channels=(len(training_files[0]) - 1),
-                                                                 data_file=data_file_opened,
-                                                                 indices=training_list)
-        if overwrite or not os.path.exists(config["patch_data_file_val"]):
-            validation_patches_data_file = write_patches_data_to_file(patches_data_file=config["patch_data_file_val"],
-                                                                      patch_shape=config["patch_shape"],
-                                                                      n_samples=len(validation_list),
-                                                                      n_channels=(len(training_files[0]) - 1),
-                                                                      data_file=data_file_opened,
-                                                                      indices=validation_list)
+        if overwrite or not os.path.exists(config["patch_data_file"]):
+            patches_data_file = write_patches_data_to_file(patches_data_file=config["patch_data_file"],
+                                                           patch_shape=config["patch_shape"],
+                                                           data_file=data_file_opened)
     #
     # if not overwrite and os.path.exists(config["model_file"]):
     #     model = load_old_model(config["model_file"])
@@ -141,12 +128,20 @@ def main(overwrite=False):
     #             early_stopping_patience=config["early_stop"],
     #             n_epochs=config["n_epochs"])
 
+    #
+    # # split to train and validation
+    # training_list, validation_list = get_validation_split(data_file_opened,
+    #                                                       data_split=config["validation_split"],
+    #                                                       overwrite=config["overwrite"],
+    #                                                       training_file=config["training_file"],
+    #                                                       validation_file=config["validation_file"])
+
     # # create generator
-    # training_gen = ClassDataGenerator(config["patch_data_file_train"],
+    # training_gen = ClassDataGenerator(config["patch_data_file"],
     #                                   imgen_params=config["imgen_args"],
     #                                   batch_size=config["batch_size"],
     #                                   seed=config["imgen_seed"])
-    # validation_gen = ClassDataGenerator(config["patch_data_file_val"],
+    # validation_gen = ClassDataGenerator(config["patch_data_file"],
     #                                     imgen_params=config["imgen_args"],
     #                                     batch_size=config["batch_size"],
     #                                     seed=config["imgen_seed"])  # TODO change to validation data
@@ -164,9 +159,19 @@ def main(overwrite=False):
     #                                             learning_rate_patience=config["patience"],
     #                                             early_stopping_patience=config["early_stop"]))
 
-    # Incompatible shapes: [6144] vs. [12288]
-    # 6144 = 12x8x8x8 = batch_size x patch_size x patch_size x patch_size
-    # 12288 = 6144x2 = batch_size x patch_size x patch_size x patch_size x number of labels?
+    # # visualization for debugging
+    # x = getattr(data_file_opened.root, 'data')
+    # normalize = getattr(data_file_opened.root, 'normalization')
+    #
+    # print(x.shape)
+    # print(normalize.shape)
+    #
+    # ind = np.random.choice(np.arange(0, x.shape[0], 1), 16, replace=False)
+    # images = x[ind, 0, :, :, 30]
+    # images = [images[i, :, :] for i in range(len(ind))]
+    # norms = normalize[ind, :]
+    # from unet3d.utils.casmip_utils import show_images
+    # show_images(images, 4, norms[:, 0])
 
     data_file_opened.close()
     # if config["write_patches"]:
@@ -174,4 +179,5 @@ def main(overwrite=False):
 
 
 if __name__ == "__main__":
+    args = parser.parse_args()
     main(overwrite=config["overwrite"])

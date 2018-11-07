@@ -15,8 +15,7 @@ class ClassDataGenerator(keras.utils.Sequence):
     """
 
     def __init__(self, file_name, batch_size=1024, data_split=0.8, start=0, end=None, root_name_x='data',
-                 root_name_y='truth', imgen_params=None, seed=1, is_train=True, patch_shape=None, crop_size=(256, 256),
-                 patch_overlap=0, patch_start_offset=None, n_processors=4):
+                 root_name_y='truth', imgen_params=None, seed=1, is_train=True, n_processors=4):
         """
         initialization
         :param file_name: hd5 file name to load data from
@@ -40,12 +39,9 @@ class ClassDataGenerator(keras.utils.Sequence):
         :type n_processors: Number of processors to use in parallel for augmentations
         """
 
-        # TODO have to return patches and not whole images
-
         self.imgen = ImageDataGenerator(**imgen_params)  # TODO: doesn't support 3D?
         self.maskgen = ImageDataGenerator(**imgen_params)
         self.seed = seed
-        # self.crop_size = np.array(crop_size)
 
         self.f = open_data_file(file_name, 'r')
 
@@ -60,9 +56,6 @@ class ClassDataGenerator(keras.utils.Sequence):
         print('loaded')
 
         self.x_shape = self.x_all[0].shape  # on images it is (512, 512, 60), on patches (8, 8, 8)
-        # self.patch_shape = patch_shape
-        # self.patch_start_offset = patch_start_offset
-        # self.patch_overlap = patch_overlap
 
         self.total_len = len(self.y_all)
         self.batch_size = batch_size

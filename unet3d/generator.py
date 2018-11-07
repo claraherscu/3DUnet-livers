@@ -253,7 +253,7 @@ def add_data(x_list, y_list, data_file, index, augment=False, augment_flip=False
         y_list.append(truth)
 
 
-def get_data_from_file(data_file, index, patch_shape=None):
+def get_data_from_file(data_file, index, patch_shape=None, read_normalization_factors=False):
     if patch_shape:
         index, patch_index = index
         data, truth = get_data_from_file(data_file, index, patch_shape=None)  # data is the image and truth is the GT
@@ -261,6 +261,9 @@ def get_data_from_file(data_file, index, patch_shape=None):
         y = get_patch_from_3d_data(truth, patch_shape, patch_index)
     else:
         x, y = data_file.root.data[index], data_file.root.truth[index, 0]
+    if read_normalization_factors:  # also have to read normalization details from the file under 'normalization' field
+        norm = data_file.root.normalization[index]
+        return x, y, norm
     return x, y
 
 

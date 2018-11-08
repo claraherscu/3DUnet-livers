@@ -12,7 +12,7 @@ from unet3d.generator_multiprocess import ClassDataGenerator
 # argument parser for running patch creation from command-line
 parser = ArgumentParser()
 parser.add_argument('-f', '--filename', dest="filename", help="write patches to file, should be h5")
-parser.add_argument('-i', '--index', dest="indices", help="take files at these indices to write")
+parser.add_argument('-i', '--index', dest="index", nargs="+", type=int, help="take files at these indices to write")
 
 
 config = dict()
@@ -70,7 +70,7 @@ def fetch_training_data_files():
     return training_data_files
 
 
-def main(overwrite=False):
+def main(overwrite=False, args=None):
     # convert input images into an hdf5 file
     # if overwrite or not os.path.exists(config["data_file"]):
     #     training_files = fetch_training_data_files()
@@ -81,9 +81,16 @@ def main(overwrite=False):
     # creating patches file
     if config["write_patches"]:
         if overwrite or not os.path.exists(config["patch_data_file"]):
-            patches_data_file = write_patches_data_to_file(patches_data_file=config["patch_data_file"],
+            if args is not None:
+                file = os.path.abspath(args.filename)
+                index = args.index
+            else:
+                file = config["patch_data_file"]
+                index = None
+            patches_data_file = write_patches_data_to_file(patches_data_file=file,
                                                            patch_shape=config["patch_shape"],
-                                                           data_file=data_file_opened)
+                                                           data_file=data_file_opened,
+                                                           indices=index)
     #
     # if not overwrite and os.path.exists(config["model_file"]):
     #     model = load_old_model(config["model_file"])
@@ -180,4 +187,4 @@ def main(overwrite=False):
 
 if __name__ == "__main__":
     args = parser.parse_args()
-    main(overwrite=config["overwrite"])
+    main(overwrite=config["overwrite"], args=args)

@@ -1,5 +1,5 @@
 import os
-
+import time
 import numpy as np
 import tables
 
@@ -125,6 +125,9 @@ def write_patches_data_to_file(patches_data_file, patch_shape, data_file, patch_
     :param indices: indices of the subset of files that should be stored in this file (if None, take all files)
     :return: patches_data_file
     """
+    print("Writing patches to destination:", patches_data_file)
+    print("Working on cases:", indices)
+
     x_shape = data_file.root.data.shape
     n_channels = x_shape[1]  # n_channels is actually the number of modalities we have
 
@@ -156,9 +159,11 @@ def write_patches_data_to_file(patches_data_file, patch_shape, data_file, patch_
     # iterating over all patch indices and adding them to the patches_data_file
     i = 1
     total = len(index_list)
+    t = time.time()
     while len(index_list) > 0:
         if i % 100 == 0:
-            print('done', str(i*100 / total)+'%\tat index', i, 'out of', total)
+            print('done', str(i*100 / total)+'%\tat index', i, 'out of', total, '\ttook', time.time()-t, 'seconds')
+            t = time.time()
         i += 1
         index = index_list.pop()
 

@@ -50,6 +50,7 @@ class ClassDataGenerator(keras.utils.Sequence):
         self.total_len = len(self.index)
         self.batch_size = batch_size
         self.is_train = is_train
+        self.steps_per_epoch = np.floor(self.total_len / self.batch_size).astype(np.int)
 
         if is_train:
             np.random.shuffle(self.index)
@@ -75,7 +76,6 @@ class ClassDataGenerator(keras.utils.Sequence):
 
     def __getitem__(self, index):
         "generate one batch of data"
-        # TODO this way we have batch_size images in a batch inside of batch_size patches -- too much
         # generate indices of the batch
         indices = self.index[index*self.batch_size:(index+1)*self.batch_size]
 
@@ -88,6 +88,8 @@ class ClassDataGenerator(keras.utils.Sequence):
         data_to_normalize = [(batch_images[i], norm_factors[i]) for i in range(batch_images.shape[0])]
         with Pool(self.n_processors) as pool:
             batch_images = pool.map(self.normalize, data_to_normalize)
+
+        batch_images = np.asarray(batch_images)
 
         # TODO: return augmentation - has error affine matrix has wrong number of rows
         # # augmentation

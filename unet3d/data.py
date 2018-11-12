@@ -150,7 +150,8 @@ def write_patches_data_to_file(patches_data_file, patch_shape, data_file, patch_
                              image_shape=patch_shape,
                              storage_names=('data', 'truth', 'index', 'normalization'),
                              affine_shape=(0, 4),
-                             affine_dtype=tables.UInt8Atom())
+                             affine_dtype=tables.UInt8Atom(),
+                             normalize=False)
     except Exception as e:
         # If something goes wrong, delete the incomplete data file
         os.remove(patches_data_file)
@@ -163,7 +164,6 @@ def write_patches_data_to_file(patches_data_file, patch_shape, data_file, patch_
     while len(index_list) > 0:
         if i % 100 == 0:
             print('done', str(i*100 / total)+'%\tat index', i, 'out of', total, '\ttook', time.time()-t, 'seconds')
-            t = time.time()
         i += 1
         index = index_list.pop()
 
@@ -189,3 +189,62 @@ def write_patches_data_to_file(patches_data_file, patch_shape, data_file, patch_
 
 def open_data_file(filename, readwrite="r"):
     return tables.open_file(filename, readwrite)
+
+
+def concatenate_data_files(out_filname, input_filenames):
+    """
+    concatenate given input filenames into one big hdf5 file.
+    :param out_filname: name of output file
+    :param input_filenames: list of names of input files
+    :return:
+    """
+    # getting all necessary information from input files
+    input_file = tables.open_file(input_filenames[0], "r")
+    n_channels = input_file.root.data.shape[1]  # number of channels in the data
+    patch_shape = input_file.root.data.shape[-3:]  # shape of every patch in the data
+    input_file.close()
+
+    # total number of entries in the files
+    n_entries = 0
+    for filename in input_filenames:
+        with tables.open_file(filename, "r") as input_file:
+            n_entries += input_file.root.data.shape[0]
+    print('n_entries is:', n_entries)
+
+    # creating hd5 file for the patches
+    try:
+        hdf5_file, data_storage, truth_storage, index_storage, normalization_storage = \
+            create_data_file(out_filname,
+                             n_channels=n_channels,
+                             n_samples=n_entries,
+                             image_shape=patch_shape,
+                             storage_names=('data', 'truth', 'index', 'normalization'),
+                             affine_shape=(0, 4),
+                             affine_dtype=tables.UInt8Atom(),
+                             normalize=False)
+    except Exception as e:
+        # If something goes wrong, delete the incomplete data file
+        os.remove(out_filname)
+        raise e
+    print('succesfully created file', out_filname)
+
+    # writing data to file
+    t = time.time()
+    for filename in input_filenames:
+        print('appending data from file', filename)
+        with tables.open_file(filename, "r") as input_file:
+            data = input_file.root.data[:]
+            data_storage.append(np.asarray(data, dtype=np.uint8))  # TODO: maybe with np.newaxis?
+            print('appended data')
+            truth = input_file.root.truth[:]
+            truth_storage.append(truth)
+            print('appended truth')
+            index = input_file.root.index[:]
+            index_storage.append(index)
+            print('appended index')
+            norm = input_file.root.normalization[:]
+            normalization_storage.append(norm)
+            print('appended normalization\nDone file')
+            print('took:', time.time() - t)
+
+    hdf5_file.close()

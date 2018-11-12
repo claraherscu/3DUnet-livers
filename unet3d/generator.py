@@ -135,6 +135,46 @@ def get_validation_split(data_file, training_file, validation_file, data_split=0
         return pickle_load(training_file), pickle_load(validation_file)
 
 
+def get_patches_validation_split(patch_index_file, training_list, validation_list, training_file_patches,
+                                 validation_file_patches, overwrite=False):
+    """
+    translates the data split to training and validation to lists of patch indices using and index file that
+    maps case index to patch index range
+    :param patch_index_file: index file that maps case index to patch index range
+    :param training_list: list of case indices for training
+    :param validation_list: list of case indices for validation
+    :param training_file_patches: Pickle file where the index location will be stored
+    :param validation_file_patches: Pickle file where the index location will be stored
+    :param overwrite: if set to True, previous files will be overwritten. The default mode is false, so that the
+    training and validation splits won't be overwritten when rerunning model training.
+    :return: training indices list, validation indices list
+    """
+    if overwrite or not os.path.exists(training_file_patches):
+        print('Creating validation split of patches...')
+        ind_to_patch_dict = dict()
+        with open(patch_index_file, "r") as case_to_patch_file:
+            case_to_patch_index = case_to_patch_file.readlines()
+            splitted = [str.split(case_to_patch_index[i], "  ") for i in range(len(case_to_patch_index))]
+            for i in range(len(splitted)):
+                ind_to_patch_dict[int(splitted[i][0])] = (int(splitted[i][1]), int(splitted[i][2]))
+
+        training_list_patches = np.array([])
+        for ind in training_list:
+            training_list_patches = np.concatenate((training_list_patches, np.arange(ind_to_patch_dict[ind][0],
+                                                                                     ind_to_patch_dict[ind][1])))
+        validation_list_patches = np.array([])
+        for ind in validation_list:
+            validation_list_patches = np.concatenate((validation_list_patches, np.arange(ind_to_patch_dict[ind][0],
+                                                                                         ind_to_patch_dict[ind][1])))
+
+        pickle_dump(training_list_patches, training_file_patches)
+        pickle_dump(validation_list_patches, validation_file_patches)
+        return training_list_patches, validation_list_patches
+    else:
+        print("Loading previous patches validation split...")
+        return pickle_load(training_file_patches), pickle_load(validation_file_patches)
+
+
 def split_list(input_list, split=0.8, shuffle_list=True):
     if shuffle_list:
         shuffle(input_list)

@@ -35,9 +35,10 @@ config["imgen_args"] = dict(horizontal_flip=True,
                             rotation_range=3)  # arguments for ImageDataGenerator setting data augmentation
 config["imgen_seed"] = np.random.randint(1e+5)  # random seed for the image augmentation, the same will be used for image&mask
 
-config["batch_size"] = 128  # originally 12, trying bigger size
+config["batch_size"] = 512  # originally 12, trying bigger size
 config["validation_batch_size"] = 12  # originally 12, reducing to reduce memory use
 config["n_epochs"] = 50  # cutoff the training after this many epochs
+config["steps_per_epoch"] = 1000
 config["patience"] = 10  # learning rate will be reduced after this many epochs if the validation loss is not improving
 config["early_stop"] = 50  # training will be stopped after this many epochs without the validation loss improving
 config["initial_learning_rate"] = 0.00001
@@ -134,10 +135,10 @@ def main(overwrite=False, args=None):
                                         batch_size=config["batch_size"],
                                         x_shape=config["patch_shape"],
                                         seed=config["imgen_seed"])
-    
+
     # run training
     model.fit_generator(generator=training_gen,
-                        steps_per_epoch=training_gen.steps_per_epoch,
+                        steps_per_epoch=config["steps_per_epoch"],
                         epochs=config["n_epochs"],
                         validation_data=validation_gen,
                         validation_steps=10,

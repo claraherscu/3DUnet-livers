@@ -161,11 +161,13 @@ def get_patches_validation_split(patch_index_file, training_list, validation_lis
         training_list_patches = np.array([])
         for ind in training_list:
             training_list_patches = np.concatenate((training_list_patches, np.arange(ind_to_patch_dict[ind][0],
-                                                                                     ind_to_patch_dict[ind][1])))
+                                                                                     ind_to_patch_dict[ind][1],
+                                                                                     dtype=np.int)))
         validation_list_patches = np.array([])
         for ind in validation_list:
             validation_list_patches = np.concatenate((validation_list_patches, np.arange(ind_to_patch_dict[ind][0],
-                                                                                         ind_to_patch_dict[ind][1])))
+                                                                                         ind_to_patch_dict[ind][1],
+                                                                                         dtype=np.int)))
 
         pickle_dump(training_list_patches, training_file_patches)
         pickle_dump(validation_list_patches, validation_file_patches)

@@ -2,11 +2,16 @@ import keras
 from keras.preprocessing.image import ImageDataGenerator
 import numpy as np
 from unet3d.data import open_data_file
+import time
+import gc
+
 from multiprocessing import Pool
 from functools import partial
 from unet3d.generator import data_generator
 from unet3d.generator import create_patch_index_list
 import copy
+import os
+import pandas as pd
 
 
 class ClassDataGenerator(keras.utils.Sequence):
@@ -19,7 +24,7 @@ class ClassDataGenerator(keras.utils.Sequence):
                  is_train=True, n_processors=4):
         """
         initialization
-        :param file_name: hd5 file name to load data from
+        :param file_name: name of the hd5 file to load data from
         :param indices: indices to read from file
         :param batch_size: Size of the batches that the training generator will provide
         :param root_name_x: the name of the entry in the hdf5 where the X data is held
@@ -27,16 +32,17 @@ class ClassDataGenerator(keras.utils.Sequence):
         :type root_name_norm: the name of the entry in the hdf5 where the normalization data is held
         :param imgen_params: parameters for the keras ImageDataGenerator
         :param seed: seed for random augmentations. will use same seed for data and masks to get the same augemntations
-        :param is_train:
+        :param is_train: when set to True, will shuffle index on the end of every epoch
         :type n_processors: Number of processors to use in parallel for augmentations
         """
-        self.index = indices
+        self.index = indices.astype(np.int)
 
         self.imgen = ImageDataGenerator(**imgen_params)  # TODO: doesn't support 3D?
         self.maskgen = ImageDataGenerator(**imgen_params)
         self.seed = seed
 
         self.f = open_data_file(file_name, 'r')
+        self.file_name = file_name
         self.root_name_x = root_name_x
         self.root_name_y = root_name_y
         self.root_name_norm = root_name_norm
@@ -50,16 +56,18 @@ class ClassDataGenerator(keras.utils.Sequence):
         self.total_len = len(self.index)
         self.batch_size = batch_size
         self.is_train = is_train
-        self.steps_per_epoch = np.floor(self.total_len / self.batch_size).astype(np.int)
+        # self.steps_per_epoch = np.floor(self.total_len / self.batch_size).astype(np.int)
 
         if is_train:
             np.random.shuffle(self.index)
 
         self.n_processors = n_processors
+        # self.f.close()
 
     def __len__(self):
         "denotes number of batches per epoch"
         return int(np.floor(self.total_len / self.batch_size))
+        # return 10
 
     @staticmethod
     def normalize(data):
@@ -74,11 +82,12 @@ class ClassDataGenerator(keras.utils.Sequence):
         data /= norm_factors[1]
         return data
 
-    def __getitem__(self, index):
-        "generate one batch of data"
-        # generate indices of the batch
-        indices = self.index[index*self.batch_size:(index+1)*self.batch_size]
-
+    def __data_generation(self, indices):
+        """
+        generates the data from the given indices
+        :param indices:
+        :return:
+        """
         # generate data from indices
         batch_images = self.x_table[indices, :]
 
@@ -86,8 +95,9 @@ class ClassDataGenerator(keras.utils.Sequence):
         norm_factors = self.norm_table[indices, :]
         # TODO find a more efficient way to create this array
         data_to_normalize = [(batch_images[i], norm_factors[i]) for i in range(batch_images.shape[0])]
-        with Pool(self.n_processors) as pool:
-            batch_images = pool.map(self.normalize, data_to_normalize)
+        # with Pool(self.n_processors) as pool:
+        #     batch_images = pool.map(self.normalize, data_to_normalize)
+        batch_images = [self.normalize(dat) for dat in data_to_normalize]
 
         batch_images = np.asarray(batch_images)
 
@@ -109,6 +119,21 @@ class ClassDataGenerator(keras.utils.Sequence):
         #     batch_y = np.array(ret_y)
 
         return batch_images, batch_y
+
+    def __getitem__(self, index):
+        "generate one batch of data"
+        if self.file_name == '/cs/casmip/clara.herscu/git/3DUnet/brats/data_liver_segmentation_patches/liver_patches_int_data_000_130_copy.h5':
+            time.sleep(5)
+
+        # freeing everything we don't need
+        gc.collect()
+
+        # generate indices of the batch
+        index = int(index)
+        indices = self.index[index*self.batch_size:np.min(((index+1)*self.batch_size, self.total_len))]
+
+        X, y = self.__data_generation(indices)
+        return X, y
 
     def on_epoch_end(self):
         "re-shuffles indices after each epoch"

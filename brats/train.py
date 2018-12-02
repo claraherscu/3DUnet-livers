@@ -9,6 +9,14 @@ from unet3d.model import unet_model_3d
 from unet3d.training import load_old_model, train_model, get_callbacks
 from unet3d.generator_multiprocess import ClassDataGenerator
 
+# ## Debug mode
+# import keras.backend as K
+# from tensorflow.python import debug as tf_debug
+# sess = K.get_session()
+# sess = tf_debug.LocalCLIDebugWrapperSession(sess)
+# K.set_session(sess)
+# ##
+
 # argument parser for running patch creation from command-line
 parser = ArgumentParser()
 parser.add_argument('-f', '--filename', dest="filename", help="write patches to file, should be h5")
@@ -35,10 +43,10 @@ config["imgen_args"] = dict(horizontal_flip=True,
                             rotation_range=3)  # arguments for ImageDataGenerator setting data augmentation
 config["imgen_seed"] = np.random.randint(1e+5)  # random seed for the image augmentation, the same will be used for image&mask
 
-config["batch_size"] = 512  # originally 12, trying bigger size
+config["batch_size"] = 64  # originally 12, trying bigger size
 config["validation_batch_size"] = 12  # originally 12, reducing to reduce memory use
 config["n_epochs"] = 50  # cutoff the training after this many epochs
-config["steps_per_epoch"] = 1000
+config["steps_per_epoch"] = 100 #5000 # limiting epoch length to better see convergence
 config["patience"] = 10  # learning rate will be reduced after this many epochs if the validation loss is not improving
 config["early_stop"] = 50  # training will be stopped after this many epochs without the validation loss improving
 config["initial_learning_rate"] = 0.00001
@@ -53,14 +61,14 @@ config["training_patch_start_offset"] = (16, 16, 16)  # randomly offset the firs
 config["skip_blank"] = True  # if True, then patches without any target will be skipped
 
 config["write_patches"] = True
-config["data_file"] = os.path.abspath("liver_data_unnormalized.h5")
-config["patch_data_file"] = os.path.abspath("data_liver_segmentation_patches/liver_patches_int_data_000_130.h5")  # holds the patched data for training
-config["model_file"] = os.path.abspath("liver_segmentation_model_patches.h5")
-config["training_file"] = os.path.abspath("training_ids_cases.pkl")
-config["validation_file"] = os.path.abspath("validation_ids_cases.pkl")
-config["training_file_patches"] = os.path.abspath("training_ids_patches.pkl")
-config["validation_file_patches"] = os.path.abspath("validation_ids_patches.pkl")
-config["patch_index_file"] = os.path.abspath("data_liver_segmentation_patches/case_patch_index.txt")  # file that holds case index:patch index mapping
+config["data_file"] = os.path.abspath("brats/liver_data_unnormalized.h5")
+config["patch_data_file"] = os.path.abspath("brats/data_liver_segmentation_patches/liver_patches_int_data_000_130.h5")  # holds the patched data for training
+config["model_file"] = os.path.abspath("brats/liver_segmentation_model_patches.h5")
+config["training_file"] = os.path.abspath("brats/training_ids_cases.pkl")
+config["validation_file"] = os.path.abspath("brats/validation_ids_cases.pkl")
+config["training_file_patches"] = os.path.abspath("brats/training_ids_patches.pkl")
+config["validation_file_patches"] = os.path.abspath("brats/validation_ids_patches.pkl")
+config["patch_index_file"] = os.path.abspath("brats/data_liver_segmentation_patches/case_patch_index.txt")  # file that holds case index:patch index mapping
 config["overwrite"] = False  # If True, will previous files. If False, will use previously written files.
 
 
@@ -129,10 +137,10 @@ def main(overwrite=False, args=None):
                                       batch_size=config["batch_size"],
                                       x_shape=config["patch_shape"],
                                       seed=config["imgen_seed"])
-    validation_gen = ClassDataGenerator(config["patch_data_file"],
+    validation_gen = ClassDataGenerator(os.path.abspath('brats/data_liver_segmentation_patches/liver_patches_int_data_000_130_copy.h5'),
                                         indices=validation_list_patches,
                                         imgen_params=config["imgen_args"],
-                                        batch_size=config["batch_size"],
+                                        batch_size=config["validation_batch_size"],
                                         x_shape=config["patch_shape"],
                                         seed=config["imgen_seed"])
 
@@ -141,31 +149,18 @@ def main(overwrite=False, args=None):
                         steps_per_epoch=config["steps_per_epoch"],
                         epochs=config["n_epochs"],
                         validation_data=validation_gen,
-                        validation_steps=10,
+                        validation_steps=config["steps_per_epoch"],
                         callbacks=get_callbacks(config["model_file"],
                                                 initial_learning_rate=config["initial_learning_rate"],
                                                 learning_rate_drop=config["learning_rate_drop"],
                                                 learning_rate_epochs=None,
                                                 learning_rate_patience=config["patience"],
-                                                early_stopping_patience=config["early_stop"]))
+                                                early_stopping_patience=config["early_stop"]),
+                        use_multiprocessing=True)
 
-    # # visualization for debugging
-    # x = getattr(data_file_opened.root, 'data')
-    # normalize = getattr(data_file_opened.root, 'normalization')
-    #
-    # print(x.shape)
-    # print(normalize.shape)
-    #
-    # ind = np.random.choice(np.arange(0, x.shape[0], 1), 16, replace=False)
-    # images = x[ind, 0, :, :, 30]
-    # images = [images[i, :, :] for i in range(len(ind))]
-    # norms = normalize[ind, :]
-    # from unet3d.utils.casmip_utils import show_images
-    # show_images(images, 4, norms[:, 0])
-
+    training_gen.f.close()
+    validation_gen.f.close()
     data_file_opened.close()
 
-
 if __name__ == "__main__":
-    args = parser.parse_args()
-    main(overwrite=config["overwrite"], args=args)
+    main(overwrite=config["overwrite"])

@@ -45,7 +45,7 @@ config["imgen_seed"] = np.random.randint(1e+5)  # random seed for the image augm
 
 config["batch_size"] = 64  # originally 12, trying bigger size
 config["validation_batch_size"] = 12  # originally 12, reducing to reduce memory use
-config["n_epochs"] = 50  # cutoff the training after this many epochs
+config["n_epochs"] = 100  # cutoff the training after this many epochs
 config["steps_per_epoch"] = 100 #5000 # limiting epoch length to better see convergence
 config["patience"] = 10  # learning rate will be reduced after this many epochs if the validation loss is not improving
 config["early_stop"] = 50  # training will be stopped after this many epochs without the validation loss improving

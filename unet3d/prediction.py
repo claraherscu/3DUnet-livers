@@ -117,7 +117,8 @@ def run_validation_case(data_index, output_dir, model, data_file, training_modal
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
 
-    affine = data_file.root.affine[data_index]
+    # affine = data_file.root.affine[data_index]  # missing from data file
+    affine = np.eye(4)  # trying to replace affine matrix with this default
     test_data = np.asarray([data_file.root.data[data_index]])
     for i, modality in enumerate(training_modalities):
         image = nib.Nifti1Image(test_data[0, i], affine)
@@ -130,6 +131,7 @@ def run_validation_case(data_index, output_dir, model, data_file, training_modal
     if patch_shape == test_data.shape[-3:]:
         prediction = predict(model, test_data, permute=permute)
     else:
+        overlap = 4  # originally 16, which is too big for our patch size
         prediction = patch_wise_prediction(model=model, data=test_data, overlap=overlap, permute=permute)[np.newaxis]
     prediction_image = prediction_to_image(prediction, affine, label_map=output_label_map, threshold=threshold,
                                            labels=labels)
@@ -153,6 +155,9 @@ def run_validation_cases(validation_keys_file, model_file, training_modalities, 
         run_validation_case(data_index=index, output_dir=case_directory, model=model, data_file=data_file,
                             training_modalities=training_modalities, output_label_map=output_label_map, labels=labels,
                             threshold=threshold, overlap=overlap, permute=permute)
+
+        # stopping after one case
+        break
     data_file.close()
 
 
